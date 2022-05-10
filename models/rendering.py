@@ -20,7 +20,7 @@ def sample_pdf(bins, weights, N_importance, det=False, eps=1e-5):
     weights = weights + eps # prevent division by zero (don't do inplace op!)
     pdf = weights / reduce(weights, 'n1 n2 -> n1 1', 'sum') # (N_rays, N_samples_)
     cdf = torch.cumsum(pdf, -1) # (N_rays, N_samples), cumulative distribution function
-    cdf = torch.cat([torch.zeros_like(cdf[: ,:1]), cdf], -1)  # (N_rays, N_samples_+1) 
+    cdf = torch.cat([torch.zeros_like(cdf[: ,:1]), cdf], -1)  # (N_rays, N_samples_+1)
                                                                # padded to 0~1 inclusive
 
     if det:
@@ -169,7 +169,7 @@ def render_rays(models,
                                     'n1 n2 c -> n1 c', 'sum')
             if white_back:
                 static_rgb_map += 1-rearrange(weights_sum, 'n -> n 1')
-            
+
             transient_rgb_map = \
                 reduce(rearrange(transient_weights, 'n1 n2 -> n1 n2 1')*transient_rgbs,
                        'n1 n2 c -> n1 c', 'sum')
@@ -177,7 +177,7 @@ def render_rays(models,
             # Add beta_min AFTER the beta composition. Different from eq 10~12 in the paper.
             # See "Notes on differences with the paper" in README.
             results['beta'] += model.beta_min
-            
+
             # the rgb maps here are when both fields exist
             results['_rgb_fine_static'] = static_rgb_map
             results['_rgb_fine_transient'] = transient_rgb_map
@@ -239,13 +239,13 @@ def render_rays(models,
         z_vals = 1/(1/near * (1-z_steps) + 1/far * z_steps)
 
     z_vals = z_vals.expand(N_rays, N_samples)
-    
+
     if perturb > 0: # perturb sampling depths (z_vals)
         z_vals_mid = 0.5 * (z_vals[: ,:-1] + z_vals[: ,1:]) # (N_rays, N_samples-1) interval mid points
         # get intervals between samples
         upper = torch.cat([z_vals_mid, z_vals[: ,-1:]], -1)
         lower = torch.cat([z_vals[: ,:1], z_vals_mid], -1)
-        
+
         perturb_rand = perturb * torch.rand_like(z_vals)
         z_vals = lower + (upper - lower) * perturb_rand
 
@@ -253,6 +253,11 @@ def render_rays(models,
 
     results = {}
     output_transient = False
+    if models['coarse'].encode_appearance:
+        if 'a_embedded' in kwargs:
+            a_embedded = kwargs['a_embedded']
+        else:
+            a_embedded = embeddings['a'](ts)
     inference(results, models['coarse'], xyz_coarse, z_vals, test_time, **kwargs)
 
     if N_importance > 0: # sample points for fine model

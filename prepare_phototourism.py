@@ -8,7 +8,7 @@ import pickle
 def get_opts():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--root_dir', type=str, required=True,
+    parser.add_argument('--root_dir', type=str, default='./data/0428_mouse_i-col_m-img',
                         help='root directory of dataset')
     parser.add_argument('--img_downscale', type=int, default=4,
                         help='how much to downscale the images for phototourism dataset')

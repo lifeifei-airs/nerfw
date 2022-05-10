@@ -17,6 +17,7 @@ from datasets.depth_utils import *
 
 torch.backends.cudnn.benchmark = True
 
+
 def get_opts():
     parser = ArgumentParser()
     parser.add_argument('--root_dir', type=str,
@@ -64,7 +65,7 @@ def get_opts():
     parser.add_argument('--beta_min', type=float, default=0.1,
                         help='minimum color variance for each ray')
 
-    parser.add_argument('--chunk', type=int, default=32*1024*4,
+    parser.add_argument('--chunk', type=int, default=32 * 1024 * 4,
                         help='chunk size to split the input to avoid OOM')
 
     parser.add_argument('--ckpt_path', type=str, required=True,
@@ -90,8 +91,8 @@ def batched_inference(models, embeddings,
         rendered_ray_chunks = \
             render_rays(models,
                         embeddings,
-                        rays[i:i+chunk],
-                        ts[i:i+chunk] if ts is not None else None,
+                        rays[i:i + chunk],
+                        ts[i:i + chunk] if ts is not None else None,
                         N_samples,
                         use_disp,
                         0,
@@ -123,8 +124,8 @@ if __name__ == "__main__":
     dataset = dataset_dict[args.dataset_name](**kwargs)
     scene = os.path.basename(args.root_dir.strip('/'))
 
-    embedding_xyz = PosEmbedding(args.N_emb_xyz-1, args.N_emb_xyz)
-    embedding_dir = PosEmbedding(args.N_emb_dir-1, args.N_emb_dir)
+    embedding_xyz = PosEmbedding(args.N_emb_xyz - 1, args.N_emb_xyz)
+    embedding_dir = PosEmbedding(args.N_emb_dir - 1, args.N_emb_dir)
     embeddings = {'xyz': embedding_xyz, 'dir': embedding_dir}
     if args.encode_a:
         embedding_a = torch.nn.Embedding(args.N_vocab, args.N_a).cuda()
@@ -136,12 +137,15 @@ if __name__ == "__main__":
         embeddings['t'] = embedding_t
 
     nerf_coarse = NeRF('coarse',
-                        in_channels_xyz=6*args.N_emb_xyz+3,
-                        in_channels_dir=6*args.N_emb_dir+3).cuda()
+                       in_channels_xyz=6 * args.N_emb_xyz + 3,
+                       in_channels_dir=6 * args.N_emb_dir + 3,
+                       encode_appearance=args.encode_a,
+                       in_channels_a=args.N_a,
+                       ).cuda()
     models = {'coarse': nerf_coarse}
     nerf_fine = NeRF('fine',
-                     in_channels_xyz=6*args.N_emb_xyz+3,
-                     in_channels_dir=6*args.N_emb_dir+3,
+                     in_channels_xyz=6 * args.N_emb_xyz + 3,
+                     in_channels_dir=6 * args.N_emb_dir + 3,
                      encode_appearance=args.encode_a,
                      in_channels_a=args.N_a,
                      encode_transient=args.encode_t,
@@ -162,14 +166,14 @@ if __name__ == "__main__":
     if args.dataset_name == 'phototourism' and args.split == 'test':
         # define testing camera intrinsics (hard-coded, feel free to change)
         dataset.test_img_w, dataset.test_img_h = args.img_wh
-        dataset.test_focal = dataset.test_img_w/2/np.tan(np.pi/6) # fov=60 degrees
-        dataset.test_K = np.array([[dataset.test_focal, 0, dataset.test_img_w/2],
-                                   [0, dataset.test_focal, dataset.test_img_h/2],
-                                   [0,                  0,                    1]])
+        dataset.test_focal = dataset.test_img_w / 2 / np.tan(np.pi / 6)  # fov=60 degrees
+        dataset.test_K = np.array([[dataset.test_focal, 0, dataset.test_img_w / 2],
+                                   [0, dataset.test_focal, dataset.test_img_h / 2],
+                                   [0, 0, 1]])
         if scene == 'brandenburg_gate':
             # select appearance embedding, hard-coded for each scene
-            dataset.test_appearance_idx = 1123 # 85572957_6053497857.jpg
-            N_frames = 30*4
+            dataset.test_appearance_idx = 1123  # 85572957_6053497857.jpg
+            N_frames = 30 * 4
             dx = np.linspace(0, 0.03, N_frames)
             dy = np.linspace(0, -0.1, N_frames)
             dz = np.linspace(0, 0.5, N_frames)
@@ -181,7 +185,11 @@ if __name__ == "__main__":
                 dataset.poses_test[i, 2, 3] += dz[i]
         else:
             raise NotImplementedError
-        kwargs['output_transient'] = False
+    if 'test' in args.scene_name:
+        dataset.test_appearance_idx = 0
+        print('fix appearance')
+
+    kwargs['output_transient'] = False
 
     for i in tqdm(range(len(dataset))):
         sample = dataset[i]
@@ -197,10 +205,10 @@ if __name__ == "__main__":
             w, h = args.img_wh
         else:
             w, h = sample['img_wh']
-        
+
         img_pred = np.clip(results['rgb_fine'].view(h, w, 3).cpu().numpy(), 0, 1)
-        
-        img_pred_ = (img_pred*255).astype(np.uint8)
+
+        img_pred_ = (img_pred * 255).astype(np.uint8)
         imgs += [img_pred_]
         imageio.imwrite(os.path.join(dir_name, f'{i:03d}.png'), img_pred_)
 
@@ -208,12 +216,12 @@ if __name__ == "__main__":
             rgbs = sample['rgbs']
             img_gt = rgbs.view(h, w, 3)
             psnrs += [metrics.psnr(img_gt, img_pred).item()]
-        
+
     if args.dataset_name == 'blender' or \
-      (args.dataset_name == 'phototourism' and args.split == 'test'):
+            (args.dataset_name == 'phototourism' and args.split == 'test'):
         imageio.mimsave(os.path.join(dir_name, f'{args.scene_name}.{args.video_format}'),
                         imgs, fps=30)
-    
+
     if psnrs:
         mean_psnr = np.mean(psnrs)
         print(f'Mean PSNR : {mean_psnr:.2f}')

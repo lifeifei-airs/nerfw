@@ -49,7 +49,10 @@ class NeRFSystem(LightningModule):
 
         self.nerf_coarse = NeRF('coarse',
                                 in_channels_xyz=6*hparams.N_emb_xyz+3,
-                                in_channels_dir=6*hparams.N_emb_dir+3)
+                                in_channels_dir=6*hparams.N_emb_dir+3,
+                                encode_appearance=hparams.encode_a,
+                                in_channels_a=hparams.N_a
+                                )
         self.models = {'coarse': self.nerf_coarse}
         if hparams.N_importance > 0:
             self.nerf_fine = NeRF('fine',

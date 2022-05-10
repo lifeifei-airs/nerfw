@@ -62,10 +62,12 @@ class PhototourismDataset(Dataset):
             self.img_ids = []
             self.image_paths = {} # {id: filename}
             for filename in list(self.files['filename']):
-                id_ = img_path_to_id[filename]
-                self.image_paths[id_] = filename
-                self.img_ids += [id_]
-
+                try:
+                    id_ = img_path_to_id[filename]
+                    self.image_paths[id_] = filename
+                    self.img_ids += [id_]
+                except:
+                    print(filename + ' not found!')
         # Step 2: read and rescale camera intrinsics
         if self.use_cache:
             with open(os.path.join(self.root_dir, f'cache/Ks{self.img_downscale}.pkl'), 'rb') as f:
